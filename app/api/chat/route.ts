@@ -204,8 +204,8 @@ export async function POST(request: NextRequest) {
         ...messages,
         assistantMessage,
         {
-          role: 'function' as const,
-          name: functionName,
+          role: 'tool' as const,
+          tool_call_id: toolCall.id,
           content: functionResult,
         },
       ]

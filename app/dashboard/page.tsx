@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 
 export default function DashboardPage() {
-  const { business } = useBusiness()
+  const { business, loading } = useBusiness()
   const [stats, setStats] = useState({
     totalAppointments: 0,
     todayAppointments: 0,
@@ -55,13 +55,34 @@ export default function DashboardPage() {
     fetchStats()
   }, [business, supabase])
 
-  if (!business) {
+  if (loading) {
     return (
       <div>
         <h1 className="text-3xl font-bold text-gray-900 mb-6">
           Welcome to AIMeet
         </h1>
         <p className="text-gray-600">Loading your business...</p>
+      </div>
+    )
+  }
+
+  if (!business) {
+    return (
+      <div>
+        <h1 className="text-3xl font-bold text-gray-900 mb-6">
+          Welcome to AIMeet
+        </h1>
+        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-6">
+          <p className="text-yellow-800 mb-4">
+            No business found. Let&apos;s set one up!
+          </p>
+          <a
+            href="/dashboard/setup"
+            className="bg-indigo-600 text-white px-6 py-2 rounded-lg font-semibold hover:bg-indigo-700 transition inline-block"
+          >
+            Set Up Business
+          </a>
+        </div>
       </div>
     )
   }
