@@ -9,6 +9,9 @@ import {
   createAppointment,
 } from '@/lib/scheduling/availability'
 import { sendAppointmentConfirmation, sendBusinessNotification } from '@/lib/email/resend'
+import { checkRateLimit, getRateLimitHeaders } from '@/lib/rate-limit'
+import { chatRequestSchema, safeValidateRequest } from '@/lib/validation/schemas'
+import { logApiError } from '@/lib/error-tracking'
 
 const supabase = createClient<Database>(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -81,12 +84,33 @@ const functions = [
 
 export async function POST(request: NextRequest) {
   try {
-    const { message, widgetKey, conversationId } = await request.json()
+    const body = await request.json()
 
-    if (!message || !widgetKey) {
+    // Validate request body
+    const validation = safeValidateRequest(body, chatRequestSchema)
+    if (!validation.success) {
       return NextResponse.json(
-        { error: 'Missing required fields' },
+        {
+          error: 'Invalid request data',
+          details: validation.error.errors
+        },
         { status: 400 }
+      )
+    }
+
+    const { message, widgetKey, conversationId } = validation.data
+
+    // Rate limiting - 60 requests per minute per widget
+    const rateLimitResult = checkRateLimit(widgetKey, 60, 60 * 1000)
+    const rateLimitHeaders = getRateLimitHeaders(rateLimitResult)
+
+    if (!rateLimitResult.allowed) {
+      return NextResponse.json(
+        { error: 'Too many requests. Please try again later.' },
+        {
+          status: 429,
+          headers: rateLimitHeaders,
+        }
       )
     }
 
@@ -395,13 +419,13 @@ export async function POST(request: NextRequest) {
         }
       }
 
-      // Show date picker after services are listed
+      // Show service picker after services are listed
+      let servicesData
       if (functionName === 'get_services') {
         try {
           const services = JSON.parse(functionResult)
           if (services && services.length > 0) {
-            showDatePicker = true
-            serviceId = services[0].id // Use first service ID
+            servicesData = services // Return services for customer to select
           }
         } catch (e) {
           console.error('Error parsing services:', e)
@@ -414,6 +438,7 @@ export async function POST(request: NextRequest) {
         slotData,
         showDatePicker,
         serviceId,
+        services: servicesData,
       })
     }
 
@@ -435,7 +460,19 @@ export async function POST(request: NextRequest) {
       conversationId: conversation.id,
     })
   } catch (error) {
-    console.error('Chat API error:', error)
+    logApiError(
+      error,
+      {
+        method: 'POST',
+        url: '/api/chat',
+        body: { message: message?.substring(0, 100), widgetKey }
+      },
+      {
+        widgetKey,
+        conversationId,
+      }
+    )
+
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

@@ -4,11 +4,20 @@ import { useState, useEffect, useRef } from 'react'
 import TimeSlotPicker from './TimeSlotPicker'
 import BookingForm from './BookingForm'
 import DatePicker from './DatePicker'
+import ServicePicker from './ServicePicker'
 
 interface TimeSlot {
   time: string
   start_time: string
   end_time: string
+}
+
+interface Service {
+  id: string
+  name: string
+  description: string
+  duration_minutes: number
+  price: number | null
 }
 
 interface SlotData {
@@ -30,6 +39,7 @@ interface Message {
   slotData?: SlotData
   showDatePicker?: boolean
   serviceId?: string
+  services?: Service[]
 }
 
 interface ChatWidgetProps {
@@ -63,6 +73,7 @@ export default function ChatWidget({ widgetKey, apiUrl = '/api/chat' }: ChatWidg
   const [conversationId, setConversationId] = useState<string | null>(null)
   const [showWelcome, setShowWelcome] = useState(true)
   const [bookingData, setBookingData] = useState<BookingData | null>(null)
+  const [selectedService, setSelectedService] = useState<{ id: string; name: string } | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -70,6 +81,19 @@ export default function ChatWidget({ widgetKey, apiUrl = '/api/chat' }: ChatWidg
       messagesEndRef.current.scrollIntoView({ behavior: 'smooth' })
     }
   }, [messages])
+
+  // Notify parent window when chat is opened/closed
+  useEffect(() => {
+    if (typeof window !== 'undefined' && window.parent) {
+      window.parent.postMessage(
+        {
+          type: 'aimeet-widget-resize',
+          isOpen: isOpen
+        },
+        '*'
+      )
+    }
+  }, [isOpen])
 
   const sendMessage = async () => {
     if (!input.trim() || loading) return
@@ -106,6 +130,7 @@ export default function ChatWidget({ widgetKey, apiUrl = '/api/chat' }: ChatWidg
           slotData: data.slotData || undefined,
           showDatePicker: data.showDatePicker || false,
           serviceId: data.serviceId || undefined,
+          services: data.services || undefined,
         },
       ])
     } catch (error) {
@@ -212,6 +237,26 @@ export default function ChatWidget({ widgetKey, apiUrl = '/api/chat' }: ChatWidg
     setBookingData(null)
   }
 
+  const handleServiceSelection = (serviceId: string, serviceName: string) => {
+    setSelectedService({ id: serviceId, name: serviceName })
+    setShowWelcome(false)
+    setMessages((prev) => [
+      ...prev,
+      {
+        role: 'user',
+        content: `I'd like to book: ${serviceName}`,
+        timestamp: new Date()
+      },
+      {
+        role: 'assistant',
+        content: 'Great choice! Please select your preferred date from the calendar below.',
+        timestamp: new Date(),
+        showDatePicker: true,
+        serviceId: serviceId,
+      }
+    ])
+  }
+
   const handleDateSelection = async (date: string, serviceId: string) => {
     // Send message to AI to get available slots for this date
     const message = `Show me available times for ${date}`
@@ -253,6 +298,7 @@ export default function ChatWidget({ widgetKey, apiUrl = '/api/chat' }: ChatWidg
           slotData: data.slotData || undefined,
           showDatePicker: data.showDatePicker || false,
           serviceId: data.serviceId || undefined,
+          services: data.services || undefined,
         },
       ])
     } catch (error) {
@@ -276,7 +322,7 @@ export default function ChatWidget({ widgetKey, apiUrl = '/api/chat' }: ChatWidg
       {!isOpen && (
         <button
           onClick={() => setIsOpen(true)}
-          className="fixed bottom-6 right-6 bg-indigo-600 text-white rounded-full p-4 shadow-lg hover:bg-indigo-700 transition-all hover:scale-110 z-50"
+          className="absolute bottom-2 right-2 bg-indigo-600 text-white rounded-full p-4 shadow-lg hover:bg-indigo-700 transition-all hover:scale-110 z-50"
           aria-label="Open chat"
         >
           <svg
@@ -297,7 +343,7 @@ export default function ChatWidget({ widgetKey, apiUrl = '/api/chat' }: ChatWidg
 
       {/* Chat window */}
       {isOpen && (
-        <div className="fixed bottom-6 right-6 w-96 h-[600px] bg-white rounded-2xl shadow-2xl flex flex-col z-50 border border-gray-200">
+        <div className="absolute top-0 left-0 w-full h-full bg-white rounded-2xl shadow-2xl flex flex-col z-50">
           {/* Header */}
           <div className="bg-indigo-600 text-white p-4 rounded-t-2xl flex justify-between items-center">
             <div>
@@ -391,7 +437,16 @@ export default function ChatWidget({ widgetKey, apiUrl = '/api/chat' }: ChatWidg
                     })}
                   </span>
                 )}
-                {msg.showDatePicker && msg.serviceId && (
+                {msg.services && msg.services.length > 0 && (
+                  <div className="w-full mt-2">
+                    <ServicePicker
+                      services={msg.services}
+                      onSelectService={handleServiceSelection}
+                      loading={loading}
+                    />
+                  </div>
+                )}
+                {msg.showDatePicker && msg.serviceId && !msg.services && (
                   <div className="w-full mt-2">
                     <DatePicker
                       onSelectDate={(date) => handleDateSelection(date, msg.serviceId!)}
