@@ -3,6 +3,12 @@ import { createClient } from '@supabase/supabase-js'
 import { chatCompletion } from '@/lib/ai/openai'
 import { retrieveRelevantContext, buildSystemPrompt } from '@/lib/ai/rag'
 import { Database } from '@/types/database'
+import {
+  getAvailableSlots,
+  findOrCreateCustomer,
+  createAppointment,
+} from '@/lib/scheduling/availability'
+import { sendAppointmentConfirmation, sendBusinessNotification } from '@/lib/email/resend'
 
 const supabase = createClient<Database>(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -19,11 +25,11 @@ const functions = [
       properties: {
         service_id: {
           type: 'string',
-          description: 'The ID of the service to book',
+          description: 'The EXACT UUID id from the service object returned by get_services (e.g. "437d554a-eca1-41f1-9b92-8ad05eebaa49"). Must be the exact id value, NOT the service name.',
         },
         date: {
           type: 'string',
-          description: 'The date to check availability (YYYY-MM-DD format)',
+          description: 'The date to check availability in YYYY-MM-DD format (e.g. "2025-12-10")',
         },
       },
       required: ['service_id', 'date'],
@@ -37,7 +43,7 @@ const functions = [
       properties: {
         service_id: {
           type: 'string',
-          description: 'The ID of the service',
+          description: 'The EXACT UUID id from the service object returned by get_services. Must be the exact id value, NOT the service name.',
         },
         customer_name: {
           type: 'string',
@@ -178,21 +184,169 @@ export async function POST(request: NextRequest) {
             .eq('business_id', business.id)
             .eq('is_active', true)
 
+          console.log('📋 Available services:', services)
+          console.log('🏢 Business ID:', business.id)
           functionResult = JSON.stringify(services)
           break
 
         case 'get_available_slots':
-          // TODO: Implement availability logic
-          functionResult = JSON.stringify({
-            message: 'Availability checking not yet implemented',
-          })
+          try {
+            console.log('🔍 Getting slots for:', {
+              business_id: business.id,
+              service_id: functionArgs.service_id,
+              date: functionArgs.date
+            })
+
+            // Validate service_id format (should be UUID)
+            const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+            if (!uuidRegex.test(functionArgs.service_id)) {
+              console.error('❌ Invalid service_id format:', functionArgs.service_id)
+              console.error('   Expected UUID format, got:', typeof functionArgs.service_id)
+            }
+
+            const slots = await getAvailableSlots(
+              business.id,
+              functionArgs.service_id,
+              functionArgs.date
+            )
+
+            if (slots.length === 0) {
+              functionResult = JSON.stringify({
+                message: 'No available slots found for this date. Please try another date.',
+                slots: [],
+              })
+            } else {
+              // Format slots in a user-friendly way
+              const formattedSlots = slots.map((slot) => {
+                const time = new Date(slot.start_time).toLocaleTimeString('en-US', {
+                  hour: 'numeric',
+                  minute: '2-digit',
+                  hour12: true,
+                })
+                return { time, start_time: slot.start_time, end_time: slot.end_time }
+              })
+
+              functionResult = JSON.stringify({
+                date: functionArgs.date,
+                slots: formattedSlots,
+                count: slots.length,
+              })
+            }
+          } catch (error) {
+            console.error('Error getting available slots:', error)
+            functionResult = JSON.stringify({
+              error: 'Failed to retrieve available time slots',
+            })
+          }
           break
 
         case 'create_appointment':
-          // TODO: Implement appointment creation
-          functionResult = JSON.stringify({
-            message: 'Appointment booking not yet implemented',
-          })
+          try {
+            console.log('📅 Creating appointment with:', functionArgs)
+
+            // Find or create customer
+            const customer = await findOrCreateCustomer(
+              business.id,
+              functionArgs.customer_email,
+              functionArgs.customer_name,
+              functionArgs.customer_phone
+            )
+
+            // Create the appointment
+            const appointment = await createAppointment(
+              business.id,
+              functionArgs.service_id,
+              customer.id,
+              functionArgs.start_time,
+              functionArgs.notes
+            )
+
+            console.log('✅ Appointment created successfully:', appointment.id)
+
+            // Get service details for confirmation
+            const { data: service } = await supabase
+              .from('services')
+              .select('name')
+              .eq('id', functionArgs.service_id)
+              .single()
+
+            const startDate = new Date(appointment.start_time)
+            const appointmentTime = startDate.toLocaleTimeString('en-US', {
+              hour: 'numeric',
+              minute: '2-digit',
+              hour12: true,
+            })
+
+            const appointmentDate = startDate.toLocaleDateString('en-US', {
+              weekday: 'long',
+              year: 'numeric',
+              month: 'long',
+              day: 'numeric',
+            })
+
+            const appointmentDateTime = startDate.toLocaleString('en-US', {
+              weekday: 'long',
+              year: 'numeric',
+              month: 'long',
+              day: 'numeric',
+              hour: 'numeric',
+              minute: '2-digit',
+              hour12: true,
+            })
+
+            // Send confirmation email to customer
+            console.log('📧 Sending confirmation email to:', functionArgs.customer_email)
+            const emailResult = await sendAppointmentConfirmation({
+              customerName: functionArgs.customer_name || 'Customer',
+              customerEmail: functionArgs.customer_email,
+              businessName: business.name,
+              serviceName: service?.name || 'Service',
+              appointmentTime,
+              appointmentDate,
+              duration: service?.duration_minutes || 30,
+            })
+
+            if (emailResult.success) {
+              console.log('✅ Confirmation email sent successfully')
+            } else {
+              console.error('❌ Failed to send confirmation email:', emailResult.error)
+            }
+
+            // Send notification to business owner if email is set
+            if (business.email) {
+              console.log('📧 Sending notification to business owner:', business.email)
+              const businessEmailResult = await sendBusinessNotification(business.email, {
+                customerName: functionArgs.customer_name || 'Customer',
+                customerEmail: functionArgs.customer_email,
+                businessName: business.name,
+                serviceName: service?.name || 'Service',
+                appointmentTime,
+                appointmentDate,
+                duration: service?.duration_minutes || 30,
+              })
+
+              if (businessEmailResult.success) {
+                console.log('✅ Business notification email sent successfully')
+              } else {
+                console.error('❌ Failed to send business notification:', businessEmailResult.error)
+              }
+            }
+
+            functionResult = JSON.stringify({
+              success: true,
+              appointment_id: appointment.id,
+              service_name: service?.name || 'Service',
+              appointment_time: appointmentDateTime,
+              customer_email: functionArgs.customer_email,
+              message: `Appointment successfully booked for ${appointmentDateTime}.`,
+            })
+          } catch (error) {
+            console.error('Error creating appointment:', error)
+            functionResult = JSON.stringify({
+              success: false,
+              error: 'Failed to create appointment. Please try again or contact us directly.',
+            })
+          }
           break
 
         default:
@@ -221,9 +375,45 @@ export async function POST(request: NextRequest) {
         function_call: { name: functionName, arguments: functionArgs },
       })
 
+      // Include slot data in response if available
+      let slotData = null
+      let showDatePicker = false
+      let serviceId = null
+
+      if (functionName === 'get_available_slots') {
+        try {
+          const parsedResult = JSON.parse(functionResult)
+          if (parsedResult.slots && parsedResult.slots.length > 0) {
+            slotData = {
+              date: parsedResult.date,
+              slots: parsedResult.slots,
+              service_id: functionArgs.service_id,
+            }
+          }
+        } catch (e) {
+          console.error('Error parsing slot data:', e)
+        }
+      }
+
+      // Show date picker after services are listed
+      if (functionName === 'get_services') {
+        try {
+          const services = JSON.parse(functionResult)
+          if (services && services.length > 0) {
+            showDatePicker = true
+            serviceId = services[0].id // Use first service ID
+          }
+        } catch (e) {
+          console.error('Error parsing services:', e)
+        }
+      }
+
       return NextResponse.json({
         message: finalMessage,
         conversationId: conversation.id,
+        slotData,
+        showDatePicker,
+        serviceId,
       })
     }
 
