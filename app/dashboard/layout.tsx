@@ -28,6 +28,7 @@ export default function DashboardLayout({
     { name: 'Business Hours', href: '/dashboard/hours', icon: '🕐' },
     { name: 'Knowledge Base', href: '/dashboard/knowledge', icon: '📚' },
     { name: 'Conversations', href: '/dashboard/conversations', icon: '💬' },
+    { name: 'Billing', href: '/dashboard/billing', icon: '💳' },
     { name: 'Settings', href: '/dashboard/settings', icon: '⚙️' },
   ]
 

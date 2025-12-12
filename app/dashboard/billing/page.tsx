@@ -1,12 +1,14 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { SUBSCRIPTION_PLANS, PlanType } from '@/lib/stripe/config'
+import { SUBSCRIPTION_PLANS, PlanType } from '@/lib/stripe/plans'
 import { loadStripe } from '@stripe/stripe-js'
+import UsageDashboard from '@/components/subscription/UsageDashboard'
 
 const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || '')
 
 interface BusinessData {
+  id: string
   subscription_plan: PlanType | null
   subscription_status: string | null
   stripe_customer_id: string | null
@@ -93,6 +95,13 @@ export default function BillingPage() {
           Manage your subscription and billing information
         </p>
       </div>
+
+      {/* Usage Dashboard */}
+      {business && (
+        <div className="mb-8">
+          <UsageDashboard planType={currentPlan} businessId={business.id} />
+        </div>
+      )}
 
       {/* Current Plan Card */}
       {currentPlan && isActive && (

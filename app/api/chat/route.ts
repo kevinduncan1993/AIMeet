@@ -12,6 +12,8 @@ import { sendAppointmentConfirmation, sendBusinessNotification } from '@/lib/ema
 import { checkRateLimit, getRateLimitHeaders } from '@/lib/rate-limit'
 import { chatRequestSchema, safeValidateRequest } from '@/lib/validation/schemas'
 import { logApiError } from '@/lib/error-tracking'
+import { canCreateResource } from '@/lib/subscription/limits'
+import { PlanType } from '@/lib/stripe/plans'
 
 const supabase = createClient<Database>(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -140,6 +142,23 @@ export async function POST(request: NextRequest) {
     }
 
     if (!conversation) {
+      // Check subscription limits before creating new conversation
+      const canCreate = await canCreateResource(
+        business.id,
+        'conversations',
+        business.subscription_plan as PlanType | null
+      )
+
+      if (!canCreate.allowed) {
+        return NextResponse.json(
+          {
+            error: 'Conversation limit reached',
+            message: canCreate.message || 'Please upgrade your plan to continue.',
+          },
+          { status: 403 }
+        )
+      }
+
       const { data, error } = await supabase
         .from('conversations')
         .insert({
