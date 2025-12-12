@@ -8,9 +8,9 @@ export async function checkSubscriptionLimit(
   limitType: 'conversations' | 'faqs' | 'services',
   planType: PlanType | null
 ): Promise<{ allowed: boolean; current: number; limit: number; message?: string }> {
-  // If no plan, treat as free tier with minimal limits
+  // If no plan, user needs to subscribe - very limited access
   const plan = planType ? SUBSCRIPTION_PLANS[planType] : null
-  const limit = plan?.limits[limitType] ?? 10 // Free tier: 10 of each
+  const limit = plan?.limits[limitType] ?? 0 // No free tier: must subscribe
 
   // Get current usage from database
   const { createClient } = await import('@/lib/supabase/server')
@@ -65,7 +65,9 @@ export async function checkSubscriptionLimit(
     limit,
     message: allowed
       ? undefined
-      : `You've reached your ${limitType} limit (${limit}). Upgrade to ${getNextPlan(planType)} for more.`,
+      : planType
+        ? `You've reached your ${limitType} limit (${limit}). Upgrade to ${getNextPlan(planType)} for more.`
+        : `Start your free 3-day trial to access AIMeet features.`,
   }
 }
 

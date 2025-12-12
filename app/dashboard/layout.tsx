@@ -2,9 +2,9 @@
 
 import { useBusiness } from '@/lib/hooks/useBusiness'
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { useRouter } from 'next/navigation'
+import { useEffect } from 'react'
 
 export default function DashboardLayout({
   children,
@@ -15,6 +15,21 @@ export default function DashboardLayout({
   const pathname = usePathname()
   const router = useRouter()
   const supabase = createClient()
+
+  // Check subscription status and redirect to paywall if needed
+  useEffect(() => {
+    if (!loading && business) {
+      const subscriptionStatus = business.subscription_status
+      const hasActiveSubscription =
+        subscriptionStatus === 'active' ||
+        subscriptionStatus === 'trialing'
+
+      // Redirect to paywall if no active subscription (except on billing page)
+      if (!hasActiveSubscription && pathname !== '/dashboard/billing') {
+        router.push('/paywall')
+      }
+    }
+  }, [business, loading, pathname, router])
 
   const handleSignOut = async () => {
     await supabase.auth.signOut()
