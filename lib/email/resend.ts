@@ -2,6 +2,36 @@ import { Resend } from 'resend'
 
 const resend = new Resend(process.env.RESEND_API_KEY)
 
+interface SendEmailParams {
+  to: string | string[]
+  subject: string
+  html: string
+  from?: string
+  text?: string
+}
+
+/**
+ * Generic email sending function
+ */
+export async function sendEmail(params: SendEmailParams) {
+  try {
+    const { to, subject, html, from, text } = params
+
+    await resend.emails.send({
+      from: from || 'AIMeet <onboarding@resend.dev>',
+      to: Array.isArray(to) ? to : [to],
+      subject,
+      html,
+      text,
+    })
+
+    return { success: true }
+  } catch (error) {
+    console.error('Failed to send email:', error)
+    return { success: false, error }
+  }
+}
+
 interface AppointmentEmailData {
   customerName: string
   customerEmail: string
@@ -10,6 +40,7 @@ interface AppointmentEmailData {
   appointmentTime: string
   appointmentDate: string
   duration: number
+  appointmentId?: string
 }
 
 /**
@@ -17,7 +48,11 @@ interface AppointmentEmailData {
  */
 export async function sendAppointmentConfirmation(data: AppointmentEmailData) {
   try {
-    const { customerName, customerEmail, businessName, serviceName, appointmentTime, appointmentDate, duration } = data
+    const { customerName, customerEmail, businessName, serviceName, appointmentTime, appointmentDate, duration, appointmentId } = data
+
+    const managementUrl = appointmentId
+      ? `${process.env.NEXT_PUBLIC_APP_URL}/appointments/${appointmentId}`
+      : null
 
     const emailHtml = `
 <!DOCTYPE html>
@@ -65,9 +100,17 @@ export async function sendAppointmentConfirmation(data: AppointmentEmailData) {
     <div style="background: #fef3c7; padding: 15px; border-radius: 8px; margin: 20px 0;">
       <p style="margin: 0; font-size: 14px;">
         <strong>⏰ Please arrive 5-10 minutes early</strong><br>
-        If you need to reschedule or cancel, please contact us as soon as possible.
+        ${managementUrl ? 'Need to make changes? Use the button below to reschedule or cancel.' : 'If you need to reschedule or cancel, please contact us as soon as possible.'}
       </p>
     </div>
+
+    ${managementUrl ? `
+    <div style="text-align: center; margin: 30px 0;">
+      <a href="${managementUrl}" style="display: inline-block; background-color: #667eea; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; font-weight: bold; font-size: 16px;">
+        Manage Appointment
+      </a>
+    </div>
+    ` : ''}
 
     <p style="font-size: 14px; color: #666; margin-top: 30px;">
       Thank you for choosing ${businessName}. We look forward to seeing you!

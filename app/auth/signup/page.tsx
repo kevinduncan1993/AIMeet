@@ -1,9 +1,10 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
+import { SUBSCRIPTION_PLANS, PlanType } from '@/lib/stripe/plans'
 
 export default function SignUpPage() {
   const [email, setEmail] = useState('')
@@ -14,7 +15,11 @@ export default function SignUpPage() {
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
   const router = useRouter()
+  const searchParams = useSearchParams()
   const supabase = createClient()
+
+  const selectedPlan = (searchParams.get('plan') as PlanType) || 'STARTER'
+  const plan = SUBSCRIPTION_PLANS[selectedPlan]
 
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -28,7 +33,7 @@ export default function SignUpPage() {
         email,
         password,
         options: {
-          emailRedirectTo: `${window.location.origin}/auth/callback`,
+          emailRedirectTo: `${window.location.origin}/auth/callback?plan=${selectedPlan}`,
           data: {
             full_name: fullName,
             business_name: businessName,
@@ -39,7 +44,9 @@ export default function SignUpPage() {
       if (signUpError) throw signUpError
 
       if (authData.user) {
-        setMessage('Check your email to confirm your account!')
+        // Store the selected plan in localStorage for after email confirmation
+        localStorage.setItem('selectedPlan', selectedPlan)
+        setMessage('Check your email to confirm your account! Once confirmed, you\'ll be redirected to start your free trial.')
       }
     } catch (err: unknown) {
       if (err instanceof Error) {
@@ -59,8 +66,13 @@ export default function SignUpPage() {
           Create your account
         </h1>
         <p className="text-gray-600">
-          Start using AI to manage your business
+          Start your free 3-day trial of the <span className="font-semibold text-indigo-600">{plan.name} Plan</span>
         </p>
+        <div className="mt-3 inline-block bg-indigo-50 px-4 py-2 rounded-lg">
+          <p className="text-sm text-gray-700">
+            ${plan.price}/month after trial • Cancel anytime
+          </p>
+        </div>
       </div>
 
       <form onSubmit={handleSignUp} className="space-y-4">

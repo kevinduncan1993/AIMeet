@@ -14,6 +14,8 @@ import { chatRequestSchema, safeValidateRequest } from '@/lib/validation/schemas
 import { logApiError } from '@/lib/error-tracking'
 import { canCreateResource } from '@/lib/subscription/limits'
 import { PlanType } from '@/lib/stripe/plans'
+import { logger, logEmail, logSuccess, logFailure, logWarning } from '@/lib/logger'
+import { syncAppointmentToCalendars } from '@/lib/calendar/sync'
 
 const supabase = createClient<Database>(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -306,10 +308,30 @@ export async function POST(request: NextRequest) {
 
             console.log('✅ Appointment created successfully:', appointment.id)
 
+            // Get full appointment details with business info for calendar sync
+            const { data: fullAppointment } = await supabase
+              .from('appointments')
+              .select(`
+                *,
+                customer:customers(name, email, phone),
+                service:services(name, duration_minutes),
+                business:businesses(name, email, address, timezone, google_access_token, google_refresh_token, microsoft_access_token, microsoft_refresh_token)
+              `)
+              .eq('id', appointment.id)
+              .single()
+
+            // Sync to connected calendars (Google/Microsoft)
+            if (fullAppointment) {
+              syncAppointmentToCalendars(fullAppointment as any).catch((error) => {
+                logger.error('Failed to sync appointment to calendars', error)
+                // Don't fail the whole operation if calendar sync fails
+              })
+            }
+
             // Get service details for confirmation
             const { data: service } = await supabase
               .from('services')
-              .select('name')
+              .select('name, duration_minutes')
               .eq('id', functionArgs.service_id)
               .single()
 
@@ -338,7 +360,7 @@ export async function POST(request: NextRequest) {
             })
 
             // Send confirmation email to customer
-            console.log('📧 Sending confirmation email to:', functionArgs.customer_email)
+            logEmail('Sending confirmation email', { to: functionArgs.customer_email })
             const emailResult = await sendAppointmentConfirmation({
               customerName: functionArgs.customer_name || 'Customer',
               customerEmail: functionArgs.customer_email,
@@ -347,17 +369,19 @@ export async function POST(request: NextRequest) {
               appointmentTime,
               appointmentDate,
               duration: service?.duration_minutes || 30,
+              appointmentId: appointment.id,
             })
 
             if (emailResult.success) {
-              console.log('✅ Confirmation email sent successfully')
+              logSuccess('Confirmation email sent successfully')
             } else {
-              console.error('❌ Failed to send confirmation email:', emailResult.error)
+              logFailure('Failed to send confirmation email')
+              logger.error('Email error details', emailResult.error)
             }
 
             // Send notification to business owner if email is set
             if (business.email) {
-              console.log('📧 Sending notification to business owner:', business.email)
+              logEmail('Sending notification to business owner', { to: business.email })
               const businessEmailResult = await sendBusinessNotification(business.email, {
                 customerName: functionArgs.customer_name || 'Customer',
                 customerEmail: functionArgs.customer_email,
@@ -369,9 +393,10 @@ export async function POST(request: NextRequest) {
               })
 
               if (businessEmailResult.success) {
-                console.log('✅ Business notification email sent successfully')
+                logSuccess('Business notification email sent successfully')
               } else {
-                console.error('❌ Failed to send business notification:', businessEmailResult.error)
+                logFailure('Failed to send business notification')
+                logger.error('Business email error details', businessEmailResult.error)
               }
             }
 

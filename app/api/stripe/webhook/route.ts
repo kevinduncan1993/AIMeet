@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { stripe, STRIPE_CONFIG } from '@/lib/stripe/config'
 import { createClient } from '@/lib/supabase/server'
 import Stripe from 'stripe'
+import { logger, logSuccess, logFailure, logWarning } from '@/lib/logger'
 
 export async function POST(request: NextRequest) {
   const body = await request.text()
@@ -20,7 +21,7 @@ export async function POST(request: NextRequest) {
       STRIPE_CONFIG.webhookSecret
     )
   } catch (error) {
-    console.error('Webhook signature verification failed:', error)
+    logger.error('Webhook signature verification failed', error)
     return NextResponse.json({ error: 'Invalid signature' }, { status: 400 })
   }
 
@@ -79,7 +80,7 @@ export async function POST(request: NextRequest) {
       case 'invoice.payment_succeeded': {
         const invoice = event.data.object as Stripe.Invoice
         // You can add logic here to send payment receipt emails
-        console.log('Payment succeeded for invoice:', invoice.id)
+        logger.info('Payment succeeded for invoice', { invoiceId: invoice.id })
         break
       }
 
@@ -96,17 +97,17 @@ export async function POST(request: NextRequest) {
           .eq('stripe_customer_id', customerId)
 
         // You can add logic here to send payment failure notification emails
-        console.log('Payment failed for invoice:', invoice.id)
+        logger.warn('Payment failed for invoice', { invoiceId: invoice.id, customerId })
         break
       }
 
       default:
-        console.log(`Unhandled event type: ${event.type}`)
+        logger.info('Unhandled event type', { eventType: event.type })
     }
 
     return NextResponse.json({ received: true })
   } catch (error) {
-    console.error('Error processing webhook:', error)
+    logger.error('Error processing webhook', error)
     return NextResponse.json({ error: 'Webhook processing failed' }, { status: 500 })
   }
 }

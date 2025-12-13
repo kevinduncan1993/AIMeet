@@ -16,7 +16,7 @@ export default function DashboardLayout({
   const router = useRouter()
   const supabase = createClient()
 
-  // Check subscription status and redirect to paywall if needed
+  // Check subscription status and redirect to billing if needed
   useEffect(() => {
     if (!loading && business) {
       const subscriptionStatus = business.subscription_status
@@ -24,9 +24,9 @@ export default function DashboardLayout({
         subscriptionStatus === 'active' ||
         subscriptionStatus === 'trialing'
 
-      // Redirect to paywall if no active subscription (except on billing page)
+      // Redirect to billing page if no subscription (allows them to start trial)
       if (!hasActiveSubscription && pathname !== '/dashboard/billing') {
-        router.push('/paywall')
+        router.push('/dashboard/billing')
       }
     }
   }, [business, loading, pathname, router])
