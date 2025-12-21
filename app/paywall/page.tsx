@@ -91,7 +91,7 @@ export default function PaywallPage() {
           {/* Features */}
           <div className="mb-8">
             <h3 className="text-2xl font-bold text-gray-900 mb-6 text-center">
-              What's included in your trial:
+              What&apos;s included in your trial:
             </h3>
             <div className="grid md:grid-cols-2 gap-4">
               {starterPlan.features.map((feature, idx) => (
@@ -127,7 +127,7 @@ export default function PaywallPage() {
               </div>
             </div>
             <div className="text-sm text-gray-600 border-t border-gray-200 pt-4">
-              ✓ You'll be billed ${starterPlan.price}/month after your 3-day trial
+              ✓ You&apos;ll be billed ${starterPlan.price}/month after your 3-day trial
               <br />
               ✓ Cancel anytime before trial ends - no charge
               <br />

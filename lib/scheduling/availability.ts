@@ -51,10 +51,12 @@ export async function getAvailableSlots(
       .eq('business_id', businessId)
       .eq('is_active', true)
 
-    if (allServices && allServices.length > 0) {
+    const servicesArray = allServices as any[]
+
+    if (servicesArray && servicesArray.length > 0) {
       // Just use the first active service as fallback
-      console.warn(`   ✅ Fallback successful: Using "${allServices[0].name}" (ID: ${allServices[0].id})`)
-      service = allServices[0]
+      console.warn(`   ✅ Fallback successful: Using "${servicesArray[0].name}" (ID: ${servicesArray[0].id})`)
+      service = servicesArray[0]
       serviceError = null
     } else {
       console.error(`   ❌ No active services found for business ${businessId}`)
@@ -76,7 +78,9 @@ export async function getAvailableSlots(
     .eq('day_of_week', dayOfWeek)
     .eq('is_active', true)
 
-  if (hoursError || !businessHours || businessHours.length === 0) {
+  const hours = businessHours as any[]
+
+  if (hoursError || !hours || hours.length === 0) {
     return [] // No business hours set for this day
   }
 
@@ -84,13 +88,15 @@ export async function getAvailableSlots(
   const startOfDay = new Date(date + 'T00:00:00').toISOString()
   const endOfDay = new Date(date + 'T23:59:59').toISOString()
 
-  const { data: appointments, error: appointmentsError } = await supabase
+  const { data: appointmentsData, error: appointmentsError } = await supabase
     .from('appointments')
     .select('start_time, end_time')
     .eq('business_id', businessId)
     .gte('start_time', startOfDay)
     .lte('start_time', endOfDay)
     .in('status', ['scheduled', 'confirmed'])
+
+  const appointments = appointmentsData as any[]
 
   if (appointmentsError) {
     throw new Error('Failed to fetch appointments')
@@ -100,11 +106,11 @@ export async function getAvailableSlots(
   const availableSlots: AvailableSlot[] = []
   const totalDuration = service.duration_minutes + (service.buffer_minutes || 0)
 
-  for (const hours of businessHours) {
+  for (const hoursItem of hours) {
     const slots = generateSlotsForPeriod(
       date,
-      hours.start_time,
-      hours.end_time,
+      hoursItem.start_time,
+      hoursItem.end_time,
       totalDuration,
       appointments || []
     )
@@ -203,9 +209,9 @@ export async function findOrCreateCustomer(
       email,
       name: name || email.split('@')[0],
       phone: phone || null,
-    })
+    } as any)
     .select('id')
-    .single()
+    .maybeSingle()
 
   if (error || !newCustomer) {
     console.error('❌ Failed to create customer:', {
@@ -232,20 +238,23 @@ export async function createAppointment(
   notes?: string
 ): Promise<{ id: string; start_time: string; end_time: string }> {
   // Get business timezone
-  const { data: business } = await supabase
+  const { data: businessData } = await supabase
     .from('businesses')
     .select('timezone')
     .eq('id', businessId)
-    .single()
+    .maybeSingle()
 
+  const business: { timezone?: string } | null = businessData as any
   const timezone = business?.timezone || 'America/New_York' // Default timezone if not set
 
   // Get service duration
-  const { data: service } = await supabase
+  const { data: serviceData } = await supabase
     .from('services')
     .select('duration_minutes')
     .eq('id', serviceId)
-    .single()
+    .maybeSingle()
+
+  const service: { duration_minutes?: number } | null = serviceData as any
 
   if (!service) {
     throw new Error('Service not found')
@@ -253,7 +262,7 @@ export async function createAppointment(
 
   // Calculate end time
   const start = new Date(startTime)
-  const end = new Date(start.getTime() + service.duration_minutes * 60000)
+  const end = new Date(start.getTime() + (service.duration_minutes || 30) * 60000)
 
   // Create appointment
   const { data: appointment, error } = await supabase
@@ -267,9 +276,9 @@ export async function createAppointment(
       status: 'scheduled',
       customer_notes: notes || null,
       timezone: timezone,
-    })
+    } as any)
     .select('id, start_time, end_time')
-    .single()
+    .maybeSingle()
 
   if (error || !appointment) {
     console.error('❌ Failed to create appointment:', {

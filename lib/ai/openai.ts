@@ -30,7 +30,7 @@ export async function chatCompletion(
     messages,
     tools: functions?.map((fn) => ({
       type: 'function' as const,
-      function: fn,
+      function: fn as any,
     })),
     temperature,
   })

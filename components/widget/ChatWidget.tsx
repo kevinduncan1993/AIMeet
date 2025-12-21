@@ -382,7 +382,7 @@ export default function ChatWidget({ widgetKey, apiUrl = '/api/chat' }: ChatWidg
                 <div>
                   <h3 className="text-xl font-semibold text-gray-900 mb-2">Welcome! 👋</h3>
                   <p className="text-gray-600 text-sm leading-relaxed">
-                    I'm your AI assistant. I can help you with:
+                    I&apos;m your AI assistant. I can help you with:
                   </p>
                   <div className="mt-3 space-y-2 text-left max-w-xs mx-auto">
                     <div className="flex items-start gap-2 text-sm text-gray-700">

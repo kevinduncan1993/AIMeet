@@ -1,7 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  // TypeScript and ESLint errors are now checked during builds
 };
 
 export default nextConfig;

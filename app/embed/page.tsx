@@ -1,10 +1,10 @@
 'use client'
 
 import { useSearchParams } from 'next/navigation'
-import { useEffect } from 'react'
+import { useEffect, Suspense } from 'react'
 import ChatWidget from '@/components/widget/ChatWidget'
 
-export default function EmbedPage() {
+function EmbedContent() {
   const searchParams = useSearchParams()
   const widgetKey = searchParams.get('key')
 
@@ -66,5 +66,19 @@ export default function EmbedPage() {
         <ChatWidget widgetKey={widgetKey} />
       </div>
     </>
+  )
+}
+
+export default function EmbedPage() {
+  return (
+    <Suspense
+      fallback={
+        <div style={{ width: '100%', height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ width: 48, height: 48, border: '4px solid #ccc', borderTop: '4px solid #4F46E5', borderRadius: '50%', animation: 'spin 1s linear infinite' }}></div>
+        </div>
+      }
+    >
+      <EmbedContent />
+    </Suspense>
   )
 }

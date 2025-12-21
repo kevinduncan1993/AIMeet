@@ -77,13 +77,10 @@ export async function syncAppointmentToCalendars(appointment: AppointmentData) {
       )
 
       results.google.success = true
-      results.google.eventId = eventId
+      results.google.eventId = eventId ?? null
 
       // Save event ID to database
-      await supabase
-        .from('appointments')
-        .update({ google_event_id: eventId })
-        .eq('id', appointment.id)
+      await (supabase.from('appointments') as any).update({ google_event_id: eventId ?? null }).eq('id', appointment.id)
 
       logger.info('Synced appointment to Google Calendar', {
         appointmentId: appointment.id,
@@ -102,10 +99,7 @@ export async function syncAppointmentToCalendars(appointment: AppointmentData) {
             appointment.business.google_refresh_token!
           )
 
-          await supabase
-            .from('businesses')
-            .update({ google_access_token: newAccessToken })
-            .eq('id', appointment.business_id)
+          await (supabase.from('businesses') as any).update({ google_access_token: newAccessToken }).eq('id', appointment.business_id)
 
           logger.info('Refreshed Google access token')
         } catch (refreshError) {
@@ -130,10 +124,7 @@ export async function syncAppointmentToCalendars(appointment: AppointmentData) {
       results.microsoft.eventId = eventId
 
       // Save event ID to database
-      await supabase
-        .from('appointments')
-        .update({ microsoft_event_id: eventId })
-        .eq('id', appointment.id)
+      await (supabase.from('appointments') as any).update({ microsoft_event_id: eventId ?? null }).eq('id', appointment.id)
 
       logger.info('Synced appointment to Microsoft Calendar', {
         appointmentId: appointment.id,
@@ -152,10 +143,7 @@ export async function syncAppointmentToCalendars(appointment: AppointmentData) {
             appointment.business.microsoft_refresh_token!
           )
 
-          await supabase
-            .from('businesses')
-            .update({ microsoft_access_token: newAccessToken })
-            .eq('id', appointment.business_id)
+          await (supabase.from('businesses') as any).update({ microsoft_access_token: newAccessToken }).eq('id', appointment.business_id)
 
           logger.info('Refreshed Microsoft access token')
         } catch (refreshError) {

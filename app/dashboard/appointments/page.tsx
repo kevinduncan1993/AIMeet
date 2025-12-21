@@ -3,11 +3,10 @@
 import { useBusiness } from '@/lib/hooks/useBusiness'
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { Appointment } from '@/types/database'
 
 export default function AppointmentsPage() {
   const { business } = useBusiness()
-  const [appointments, setAppointments] = useState<Appointment[]>([])
+  const [appointments, setAppointments] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const supabase = createClient()
 

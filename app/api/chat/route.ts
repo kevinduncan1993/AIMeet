@@ -87,6 +87,10 @@ const functions = [
 ]
 
 export async function POST(request: NextRequest) {
+  let message: string | undefined
+  let widgetKey: string | undefined
+  let conversationId: string | undefined
+
   try {
     const body = await request.json()
 
@@ -96,13 +100,16 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         {
           error: 'Invalid request data',
-          details: validation.error.errors
+          details: validation.error.issues
         },
         { status: 400 }
       )
     }
 
-    const { message, widgetKey, conversationId } = validation.data
+    const validatedData = validation.data
+    message = validatedData.message
+    widgetKey = validatedData.widgetKey
+    conversationId = validatedData.conversationId
 
     // Rate limiting - 60 requests per minute per widget
     const rateLimitResult = checkRateLimit(widgetKey, 60, 60 * 1000)
@@ -119,27 +126,30 @@ export async function POST(request: NextRequest) {
     }
 
     // Get business by widget key
-    const { data: business, error: businessError } = await supabase
+    const { data: businessData, error: businessError } = await supabase
       .from('businesses')
       .select('*')
       .eq('widget_key', widgetKey)
-      .single()
+      .maybeSingle()
 
-    if (businessError || !business) {
+    if (businessError || !businessData) {
       return NextResponse.json(
         { error: 'Invalid widget key' },
         { status: 404 }
       )
     }
 
+    // Type-safe business reference
+    const business: Database['public']['Tables']['businesses']['Row'] = businessData
+
     // Get or create conversation
-    let conversation
+    let conversation: Database['public']['Tables']['conversations']['Row'] | null = null
     if (conversationId) {
       const { data } = await supabase
         .from('conversations')
         .select('*')
         .eq('id', conversationId)
-        .single()
+        .maybeSingle()
       conversation = data
     }
 
@@ -148,7 +158,7 @@ export async function POST(request: NextRequest) {
       const canCreate = await canCreateResource(
         business.id,
         'conversations',
-        business.subscription_plan as PlanType | null
+        business.subscription_tier as PlanType | null
       )
 
       if (!canCreate.allowed) {
@@ -161,32 +171,38 @@ export async function POST(request: NextRequest) {
         )
       }
 
-      const { data, error } = await supabase
+      const insertResult = await supabase
         .from('conversations')
         .insert({
           business_id: business.id,
           channel: 'widget',
           first_message_at: new Date().toISOString(),
-        })
+          metadata: {} as any,
+          customer_id: null,
+          session_id: null,
+          last_message_at: null,
+        } as any)
         .select()
-        .single()
+        .maybeSingle()
 
-      if (error) throw error
-      conversation = data
+      if (insertResult.error) throw insertResult.error
+      conversation = insertResult.data
     }
 
     // Save user message
     await supabase.from('messages').insert({
-      conversation_id: conversation.id,
+      conversation_id: conversation!.id,
       role: 'user',
       content: message,
-    })
+      function_call: null,
+      tokens_used: null,
+    } as any)
 
     // Get conversation history
     const { data: previousMessages } = await supabase
       .from('messages')
       .select('*')
-      .eq('conversation_id', conversation.id)
+      .eq('conversation_id', conversation!.id)
       .order('created_at', { ascending: true })
       .limit(10)
 
@@ -203,7 +219,7 @@ export async function POST(request: NextRequest) {
     // Prepare messages for OpenAI
     const messages = [
       { role: 'system' as const, content: systemPrompt },
-      ...(previousMessages?.map((msg) => ({
+      ...(previousMessages?.map((msg: any) => ({
         role: msg.role as 'user' | 'assistant',
         content: msg.content,
       })) || []),
@@ -215,7 +231,7 @@ export async function POST(request: NextRequest) {
 
     // Handle function calls if present
     if (assistantMessage.tool_calls) {
-      const toolCall = assistantMessage.tool_calls[0]
+      const toolCall: any = assistantMessage.tool_calls[0]
       const functionName = toolCall.function.name
       const functionArgs = JSON.parse(toolCall.function.arguments)
 
@@ -329,11 +345,13 @@ export async function POST(request: NextRequest) {
             }
 
             // Get service details for confirmation
-            const { data: service } = await supabase
+            const { data: serviceData } = await supabase
               .from('services')
               .select('name, duration_minutes')
               .eq('id', functionArgs.service_id)
-              .single()
+              .maybeSingle()
+
+            const service: { name: string; duration_minutes: number } | null = serviceData as any
 
             const startDate = new Date(appointment.start_time)
             const appointmentTime = startDate.toLocaleTimeString('en-US', {
@@ -437,11 +455,12 @@ export async function POST(request: NextRequest) {
 
       // Save assistant message
       await supabase.from('messages').insert({
-        conversation_id: conversation.id,
+        conversation_id: conversation!.id,
         role: 'assistant',
         content: finalMessage || '',
         function_call: { name: functionName, arguments: functionArgs },
-      })
+        tokens_used: null,
+      } as any)
 
       // Include slot data in response if available
       let slotData = null
@@ -478,7 +497,7 @@ export async function POST(request: NextRequest) {
 
       return NextResponse.json({
         message: finalMessage,
-        conversationId: conversation.id,
+        conversationId: conversation!.id,
         slotData,
         showDatePicker,
         serviceId,
@@ -488,20 +507,19 @@ export async function POST(request: NextRequest) {
 
     // Save assistant message
     await supabase.from('messages').insert({
-      conversation_id: conversation.id,
+      conversation_id: conversation!.id,
       role: 'assistant',
       content: assistantMessage.content || '',
-    })
+      function_call: null,
+      tokens_used: null,
+    } as any)
 
     // Update conversation last message time
-    await supabase
-      .from('conversations')
-      .update({ last_message_at: new Date().toISOString() })
-      .eq('id', conversation.id)
+    await (supabase.from('conversations') as any).update({ last_message_at: new Date().toISOString() }).eq('id', conversation!.id)
 
     return NextResponse.json({
       message: assistantMessage.content,
-      conversationId: conversation.id,
+      conversationId: conversation!.id,
     })
   } catch (error) {
     logApiError(

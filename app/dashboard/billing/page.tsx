@@ -99,7 +99,7 @@ export default function BillingPage() {
       {/* Usage Dashboard */}
       {business && (
         <div className="mb-8">
-          <UsageDashboard planType={currentPlan} businessId={business.id} />
+          <UsageDashboard planType={currentPlan ?? null} businessId={business.id} />
         </div>
       )}
 
@@ -244,7 +244,7 @@ export default function BillingPage() {
               Can I cancel my subscription?
             </h4>
             <p className="text-sm text-gray-600">
-              Yes, you can cancel anytime through the billing portal. You'll retain
+              Yes, you can cancel anytime through the billing portal. You&apos;ll retain
               access until the end of your current billing period.
             </p>
           </div>

@@ -127,7 +127,7 @@ export default function UsageDashboard({ planType, businessId }: UsageDashboardP
       {!planType && (
         <div className="mt-4 pt-4 border-t border-gray-200">
           <p className="text-sm text-gray-600">
-            You're on the free plan. Upgrade to remove limits and unlock premium features.
+            You&apos;re on the free plan. Upgrade to remove limits and unlock premium features.
           </p>
         </div>
       )}

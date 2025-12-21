@@ -215,7 +215,7 @@ export default function BookingForm({
       </form>
 
       <p className="text-xs text-gray-500 text-center mt-4">
-        By confirming, you'll receive a confirmation email with appointment details
+        By confirming, you&apos;ll receive a confirmation email with appointment details
       </p>
     </div>
   )

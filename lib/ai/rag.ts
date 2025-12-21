@@ -22,14 +22,14 @@ export async function retrieveRelevantContext(
       match_threshold: 0.7,
       match_count: topK,
       business_filter: businessId,
-    })
+    } as any)
 
     if (error) {
       console.error('Error retrieving context:', error)
       return []
     }
 
-    return data?.map((chunk: { content: string }) => chunk.content) || []
+    return (data as any)?.map((chunk: { content: string }) => chunk.content) || []
   } catch (error) {
     console.error('Error in RAG retrieval:', error)
     return []

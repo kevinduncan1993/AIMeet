@@ -111,7 +111,7 @@ export default function DashboardPage() {
 
         <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-200">
           <div className="text-sm font-medium text-gray-600 mb-1">
-            Today's Appointments
+            Today&apos;s Appointments
           </div>
           <div className="text-3xl font-bold text-indigo-600">
             {stats.todayAppointments}

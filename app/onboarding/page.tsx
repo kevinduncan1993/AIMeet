@@ -1,10 +1,10 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, Suspense } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { PlanType } from '@/lib/stripe/plans'
 
-export default function OnboardingPage() {
+function OnboardingContent() {
   const searchParams = useSearchParams()
   const router = useRouter()
   const [loading, setLoading] = useState(true)
@@ -76,12 +76,31 @@ export default function OnboardingPage() {
           Setting up your trial...
         </h1>
         <p className="text-gray-600">
-          We're redirecting you to complete your subscription setup.
+          We&apos;re redirecting you to complete your subscription setup.
         </p>
         <p className="text-sm text-gray-500 mt-4">
           This will only take a moment
         </p>
       </div>
     </div>
+  )
+}
+
+export default function OnboardingPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-purple-50 flex items-center justify-center p-4">
+          <div className="max-w-md w-full bg-white rounded-xl shadow-lg p-8 text-center">
+            <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-indigo-600 mx-auto mb-6"></div>
+            <h1 className="text-2xl font-bold text-gray-900 mb-2">
+              Loading...
+            </h1>
+          </div>
+        </div>
+      }
+    >
+      <OnboardingContent />
+    </Suspense>
   )
 }

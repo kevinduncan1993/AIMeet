@@ -1,12 +1,12 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { SUBSCRIPTION_PLANS, PlanType } from '@/lib/stripe/plans'
 
-export default function SignUpPage() {
+function SignUpContent() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [fullName, setFullName] = useState('')
@@ -164,5 +164,19 @@ export default function SignUpPage() {
         </p>
       </div>
     </div>
+  )
+}
+
+export default function SignUpPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-indigo-50 via-white to-purple-50 p-4">
+          <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-indigo-600"></div>
+        </div>
+      }
+    >
+      <SignUpContent />
+    </Suspense>
   )
 }

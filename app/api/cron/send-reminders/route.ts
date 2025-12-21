@@ -68,7 +68,7 @@ export async function GET(request: NextRequest) {
     let failureCount = 0
 
     // Send reminders
-    for (const appointment of appointments) {
+    for (const appointment of appointments as any[]) {
       try {
         if (!appointment.customer?.email) {
           console.warn(`⚠️ Skipping appointment ${appointment.id} - no customer email`)
@@ -178,10 +178,7 @@ export async function GET(request: NextRequest) {
         })
 
         // Update reminder_sent_at timestamp
-        await supabase
-          .from('appointments')
-          .update({ reminder_sent_at: new Date().toISOString() })
-          .eq('id', appointment.id)
+        await (supabase.from('appointments') as any).update({ reminder_sent_at: new Date().toISOString() }).eq('id', appointment.id)
 
         console.log(`✅ Reminder sent for appointment ${appointment.id}`)
         successCount++
